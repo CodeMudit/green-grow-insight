@@ -107,12 +107,36 @@ export default {
         },
         "float": {
           "0%, 100%": { transform: "translateY(0px)" },
-          "50%": { transform: "translateY(-10px)" },
+          "50%": { transform: "translateY(-20px)" },
         },
         "slide-down": {
           "0%": { transform: "translateY(-100%)", opacity: "0" },
           "100%": { transform: "translateY(0)", opacity: "1" },
         },
+        "pulse-scale": {
+          "0%, 100%": { transform: "scale(1)" },
+          "50%": { transform: "scale(1.1)" },
+        },
+        "rotate-slow": {
+          "0%": { transform: "rotate(0deg)" },
+          "100%": { transform: "rotate(360deg)" },
+        },
+        "bounce-gentle": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-10px)" },
+        },
+        "slide-right": {
+          "0%": { transform: "translateX(-100%)", opacity: "0" },
+          "100%": { transform: "translateX(0)", opacity: "1" },
+        },
+        "shimmer": {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        "wiggle": {
+          "0%, 100%": { transform: "rotate(-3deg)" },
+          "50%": { transform: "rotate(3deg)" },
+        }
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -120,8 +144,14 @@ export default {
         "fade-in": "fade-in 0.6s ease-out",
         "slide-in-right": "slide-in-right 0.4s ease-out",
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
-        "float": "float 3s ease-in-out infinite",
+        "float": "float 4s ease-in-out infinite",
         "slide-down": "slide-down 0.6s ease-out",
+        "pulse-scale": "pulse-scale 2s ease-in-out infinite",
+        "rotate-slow": "rotate-slow 20s linear infinite",
+        "bounce-gentle": "bounce-gentle 2s ease-in-out infinite",
+        "slide-right": "slide-right 0.8s ease-out",
+        "shimmer": "shimmer 2s linear infinite",
+        "wiggle": "wiggle 1s ease-in-out infinite",
       },
     },
   },
