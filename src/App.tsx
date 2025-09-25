@@ -2,7 +2,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -18,6 +19,16 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+function Protected({ children }: { children: React.ReactNode }) {
+  const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
+  useEffect(() => {
+    const token = localStorage.getItem("auth_token");
+    setIsAuthed(Boolean(token));
+  }, []);
+  if (isAuthed === null) return null;
+  return isAuthed ? <>{children}</> : <Navigate to="/login" replace />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -28,14 +39,14 @@ const App = () => (
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/weather" element={<WeatherPage />} />
-          <Route path="/news" element={<NewsPage />} />
-          <Route path="/market" element={<MarketPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/npk-calculator" element={<NPKCalculator />} />
-          <Route path="/image-analysis" element={<ImageAnalysis />} />
-          <Route path="/chatbot" element={<Chatbot />} />
+          <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
+          <Route path="/weather" element={<Protected><WeatherPage /></Protected>} />
+          <Route path="/news" element={<Protected><NewsPage /></Protected>} />
+          <Route path="/market" element={<Protected><MarketPage /></Protected>} />
+          <Route path="/profile" element={<Protected><ProfilePage /></Protected>} />
+          <Route path="/npk-calculator" element={<Protected><NPKCalculator /></Protected>} />
+          <Route path="/image-analysis" element={<Protected><ImageAnalysis /></Protected>} />
+          <Route path="/chatbot" element={<Protected><Chatbot /></Protected>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

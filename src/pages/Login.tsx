@@ -6,9 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Leaf, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { postLogin } from "@/lib/api";
 
 const Login = () => {
-  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -18,16 +19,22 @@ const Login = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
-    // Simulate login
-    setTimeout(() => {
-      toast({
-        title: "Welcome back!",
-        description: "Successfully logged in to CropDrop",
-      });
+    try {
+      const resp = await postLogin({ phone, password });
+      const token = resp?.token || resp?.access_token;
+      if (token) {
+        localStorage.setItem("auth_token", token);
+      } else {
+        // Backend doesn't return a token; use a temporary session flag
+        localStorage.setItem("auth_token", "session");
+      }
+      toast({ title: "Welcome back!", description: "Successfully logged in to CropDrop" });
       navigate("/dashboard");
+    } catch (err) {
+      toast({ title: "Login failed", description: "Check your credentials and try again", variant: "destructive" });
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -61,15 +68,15 @@ const Login = () => {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-foreground font-medium">
-                  Email Address
+                <Label htmlFor="phone" className="text-foreground font-medium">
+                  Phone Number
                 </Label>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="farmer@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="phone"
+                  type="tel"
+                  placeholder="10-digit phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
                   required
                   className="bg-background/50 border-border focus:border-primary transition-smooth"
                 />

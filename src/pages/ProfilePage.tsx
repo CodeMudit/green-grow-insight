@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,20 +19,62 @@ import {
 } from "lucide-react";
 import MainLayout from "@/components/MainLayout";
 import { useToast } from "@/hooks/use-toast";
+import { getUserProfile } from "@/lib/api";
 
 const ProfilePage = () => {
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [profile, setProfile] = useState({
-    name: "John Kumar",
-    email: "john.farmer@example.com",
-    phone: "+91 98765 43210",
-    location: "Mumbai, Maharashtra",
-    farmSize: "25 hectares",
-    experience: "12 years",
-    crops: ["Wheat", "Cotton", "Rice"],
-    joinDate: "January 2022"
+    name: "",
+    email: "",
+    phone: "",
+    location: "",
+    farmSize: "",
+    experience: "",
+    crops: [] as string[],
+    joinDate: ""
   });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        // Prefer backend profile if we have phone
+        const local = localStorage.getItem("user_profile");
+        const phone = local ? JSON.parse(local)?.phone : null;
+        if (phone) {
+          try {
+            const data = await getUserProfile(phone);
+            const loc = data?.location;
+            setProfile({
+              name: data?.name || "",
+              email: data?.email || "",
+              phone: data?.phone || "",
+              location: loc?.district && loc?.state ? `${loc.district}, ${loc.state}` : "",
+              farmSize: data?.land_size ? `${data.land_size} hectares` : "",
+              experience: "",
+              crops: [],
+              joinDate: new Date().toLocaleString('default', { month: 'long', year: 'numeric' })
+            });
+            return;
+          } catch {}
+        }
+        // Fallback to local if backend unavailable
+        if (local) {
+          const u = JSON.parse(local);
+          setProfile({
+            name: u.name || "",
+            email: u.email || "",
+            phone: u.phone || "",
+            location: u.state && u.district ? `${u.district}, ${u.state}` : "",
+            farmSize: u.land_size ? `${u.land_size} hectares` : "",
+            experience: "",
+            crops: [],
+            joinDate: new Date().toLocaleString('default', { month: 'long', year: 'numeric' })
+          });
+        }
+      } catch {}
+    })();
+  }, []);
 
   const handleSave = () => {
     setIsEditing(false);
@@ -114,7 +156,7 @@ const ProfilePage = () => {
                     <div>
                       <Label className="text-foreground font-medium">Full Name</Label>
                       {isEditing ? (
-                        <Input value={profile.name} className="mt-1" />
+                        <Input value={profile.name} className="mt-1" readOnly />
                       ) : (
                         <p className="mt-1 text-muted-foreground">{profile.name}</p>
                       )}
@@ -122,7 +164,7 @@ const ProfilePage = () => {
                     <div>
                       <Label className="text-foreground font-medium">Email Address</Label>
                       {isEditing ? (
-                        <Input value={profile.email} className="mt-1" />
+                        <Input value={profile.email} className="mt-1" readOnly />
                       ) : (
                         <p className="mt-1 text-muted-foreground">{profile.email}</p>
                       )}
@@ -130,7 +172,7 @@ const ProfilePage = () => {
                     <div>
                       <Label className="text-foreground font-medium">Phone Number</Label>
                       {isEditing ? (
-                        <Input value={profile.phone} className="mt-1" />
+                        <Input value={profile.phone} className="mt-1" readOnly />
                       ) : (
                         <p className="mt-1 text-muted-foreground">{profile.phone}</p>
                       )}
@@ -138,7 +180,7 @@ const ProfilePage = () => {
                     <div>
                       <Label className="text-foreground font-medium">Farm Size</Label>
                       {isEditing ? (
-                        <Input value={profile.farmSize} className="mt-1" />
+                        <Input value={profile.farmSize} className="mt-1" readOnly />
                       ) : (
                         <p className="mt-1 text-muted-foreground">{profile.farmSize}</p>
                       )}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -9,11 +9,28 @@ import {
   Calendar,
   Thermometer,
   Droplets,
-  Wind
+  Wind,
+  Loader2
 } from "lucide-react";
+import { getWeather, getWeatherByCoords } from "@/lib/api";
+import { useLocation } from "@/hooks/useLocation";
+
+interface WeatherForecast {
+  day: string;
+  date: string;
+  high: number;
+  low: number;
+  humidity: number;
+  wind: number;
+  condition: string;
+  icon: any;
+  precipitation: number;
+}
 
 const WeatherSection = () => {
-  const [weeklyForecast] = useState([
+  const { location: userLocation } = useLocation();
+  const [weeklyForecast, setWeeklyForecast] = useState<WeatherForecast[]>([
+    // Default fallback data
     {
       day: "Today",
       date: "Mar 15",
@@ -92,6 +109,76 @@ const WeatherSection = () => {
       precipitation: 5
     }
   ]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchWeatherForecast = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        let weatherData;
+        
+        // Use coordinates if available, otherwise fallback to profile location
+        if (userLocation.latitude && userLocation.longitude) {
+          weatherData = await getWeatherByCoords(userLocation.latitude, userLocation.longitude);
+          console.log("By Coords",weatherData)
+        } else {
+          const raw = localStorage.getItem("user_profile");
+          const profile = raw ? JSON.parse(raw) : null;
+          
+          if (profile?.location?.district) {
+            weatherData = await getWeather(profile.location.district);
+            console.log(weatherData)
+          } else {
+            setError('Location not available. Please enable location services.');
+            return;
+          }
+        }
+        
+        if (weatherData && weatherData.forecast && weatherData.forecast.forecastday) {
+          const forecast = weatherData.forecast.forecastday.slice(0, 7).map((day: any, index: number) => {
+            const date = new Date(day.date);
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            
+            return {
+              day: index === 0 ? 'Today' : index === 1 ? 'Tomorrow' : dayNames[date.getDay()],
+              date: `${monthNames[date.getMonth()]} ${date.getDate()}`,
+              high: Math.round(day.day.maxtemp_c),
+              low: Math.round(day.day.mintemp_c),
+              humidity: Math.round(day.day.avghumidity),
+              wind: Math.round(day.day.maxwind_kph),
+              condition: day.day.condition.text,
+              icon: getWeatherIcon(day.day.condition.text),
+              precipitation: Math.round(day.day.daily_chance_of_rain || day.day.daily_chance_of_snow || 0)
+            };
+          });
+          setWeeklyForecast(forecast);
+          console.log("Forecast",forecast)
+        }
+      } catch (err) {
+        console.error('Failed to fetch weather forecast:', err);
+        setError('Failed to load weather forecast');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchWeatherForecast();
+  }, [userLocation.latitude, userLocation.longitude]);
+
+  const getWeatherIcon = (condition: string) => {
+    const conditionLower = condition.toLowerCase();
+    if (conditionLower.includes('sunny') || conditionLower.includes('clear')) return Sun;
+    if (conditionLower.includes('rain') || conditionLower.includes('shower')) return CloudRain;
+    if (conditionLower.includes('cloud')) {
+      if (conditionLower.includes('partly')) return CloudSun;
+      return Cloud;
+    }
+    return CloudSun;
+  };
 
   const getConditionColor = (condition: string) => {
     switch (condition.toLowerCase()) {
@@ -108,6 +195,27 @@ const WeatherSection = () => {
     if (precipitation >= 30) return { variant: 'secondary' as const, text: 'Medium' };
     return { variant: 'outline' as const, text: 'Low' };
   };
+
+  if (loading) {
+    return (
+      <Card className="bg-gradient-card shadow-card hover:shadow-elevated transition-smooth">
+        <CardHeader>
+          <CardTitle className="flex items-center text-foreground">
+            <Calendar className="h-5 w-5 mr-2 text-primary" />
+            7-Day Weather Forecast
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">Loading forecast...</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="bg-gradient-card shadow-card hover:shadow-elevated transition-smooth">
@@ -177,14 +285,27 @@ const WeatherSection = () => {
           })}
         </div>
         
+        {/* Dynamic Farming Recommendations */}
         <div className="mt-6 p-4 bg-gradient-primary/5 rounded-lg border border-primary/20">
           <h4 className="font-semibold text-foreground mb-2 flex items-center">
             <Sun className="h-4 w-4 mr-2 text-warning" />
             Farming Recommendation
           </h4>
           <p className="text-sm text-muted-foreground">
-            Heavy rainfall expected on Monday-Tuesday. Consider harvesting mature crops and 
-            ensuring proper drainage. Good planting conditions expected from Wednesday onwards.
+            {(() => {
+              const highRainDays = weeklyForecast.filter(day => day.precipitation > 70);
+              const hotDays = weeklyForecast.filter(day => day.high > 35);
+              
+              if (highRainDays.length > 2) {
+                return "Heavy rainfall expected this week. Consider harvesting mature crops and ensuring proper drainage. Avoid field operations during wet conditions.";
+              } else if (hotDays.length > 3) {
+                return "High temperatures expected. Increase irrigation frequency and consider shade protection for sensitive crops. Early morning or evening field work recommended.";
+              } else if (weeklyForecast.some(day => day.precipitation < 10 && day.high > 30)) {
+                return "Dry and warm conditions ahead. Good for harvesting and field preparation. Ensure adequate irrigation for growing crops.";
+              } else {
+                return "Moderate weather conditions expected. Good time for regular farming activities including planting, weeding, and crop monitoring.";
+              }
+            })()}
           </p>
         </div>
       </CardContent>

@@ -16,6 +16,8 @@ import {
   Clock
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import MainLayout from "@/components/MainLayout";
+import { postChatGeneral } from "@/lib/api";
 
 interface Message {
   id: number;
@@ -45,14 +47,7 @@ const Chatbot = () => {
     "What fertilizer is best for rice?"
   ];
 
-  const botResponses = [
-    "Based on your location and crop type, I recommend applying organic fertilizer during the early growing season. This will provide essential nutrients while improving soil health.",
-    "For optimal growth, ensure your crops receive adequate water (about 1-2 inches per week) and maintain proper spacing to prevent overcrowding and disease spread.",
-    "The symptoms you describe suggest a common fungal infection. Apply copper-based fungicide and improve air circulation around your plants to prevent further spread.",
-    "Current weather conditions are favorable for planting. However, I recommend waiting 2-3 days as rainfall is expected which will provide natural irrigation for your seeds.",
-    "Your soil pH seems slightly acidic. Adding lime can help balance it, which will improve nutrient uptake and overall plant health for most crops.",
-    "That's an excellent question! Based on seasonal patterns, I suggest starting with disease-resistant varieties and implementing crop rotation to maintain soil fertility."
-  ];
+  const botResponses: string[] = [];
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -74,19 +69,26 @@ const Chatbot = () => {
     setInputMessage("");
     setIsTyping(true);
 
-    // Simulate AI response delay
-    setTimeout(() => {
-      const randomResponse = botResponses[Math.floor(Math.random() * botResponses.length)];
+    try {
+      const responseText = await postChatGeneral(newUserMessage.content);
       const botMessage: Message = {
         id: Date.now() + 1,
         type: 'bot',
-        content: randomResponse,
+        content: responseText,
         timestamp: new Date()
       };
-      
       setMessages(prev => [...prev, botMessage]);
+    } catch (err) {
+      const botMessage: Message = {
+        id: Date.now() + 1,
+        type: 'bot',
+        content: "Sorry, I'm having trouble connecting to the assistant right now.",
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, botMessage]);
+    } finally {
       setIsTyping(false);
-    }, 2000);
+    }
   };
 
   const handleQuickQuestion = (question: string) => {
@@ -101,32 +103,7 @@ const Chatbot = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-gradient-glass backdrop-blur-md border-b border-border/50">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center space-x-4">
-            <Button
-              variant="ghost"
-              onClick={() => navigate("/dashboard")}
-              className="text-muted-foreground hover:text-primary"
-            >
-              <ArrowLeft className="h-5 w-5 mr-2" />
-              Dashboard
-            </Button>
-            <div className="flex items-center space-x-3">
-              <div className="bg-gradient-primary p-2 rounded-xl shadow-green animate-pulse-glow">
-                <Bot className="h-6 w-6 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="text-xl font-display font-semibold text-foreground">AI Farming Assistant</h1>
-                <p className="text-sm text-muted-foreground">Get instant farming advice and support</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <MainLayout>
       <div className="container mx-auto px-6 py-8 max-w-4xl">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-200px)]">
           {/* Quick Actions Sidebar */}
@@ -144,9 +121,11 @@ const Chatbot = () => {
                     key={index}
                     variant="ghost"
                     onClick={() => handleQuickQuestion(question)}
-                    className="w-full text-left justify-start h-auto p-3 text-xs hover:bg-secondary/50 text-muted-foreground hover:text-primary"
+                    className="w-full text-left justify-start h-auto p-3 text-sm leading-relaxed hover:bg-secondary/50 text-muted-foreground hover:text-primary whitespace-normal break-words"
                   >
-                    {question}
+                    <span className="block w-full text-left">
+                      {question}
+                    </span>
                   </Button>
                 ))}
               </CardContent>
@@ -270,7 +249,7 @@ const Chatbot = () => {
           </div>
         </div>
       </div>
-    </div>
+    </MainLayout>
   );
 };
 

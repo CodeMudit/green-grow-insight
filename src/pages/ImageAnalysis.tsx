@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,10 +13,18 @@ import {
   AlertTriangle,
   CheckCircle,
   Leaf,
-  Bug
+  Bug,
+  Brain,
+  Zap,
+  Search,
+  Microscope,
+  Eye,
+  Sparkles
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import MainLayout from "@/components/MainLayout";
 import { useToast } from "@/hooks/use-toast";
+import { postAnalyzeImage, getAssetUrl } from "@/lib/api";
 
 const ImageAnalysis = () => {
   const navigate = useNavigate();
@@ -26,6 +34,7 @@ const ImageAnalysis = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -50,90 +59,134 @@ const ImageAnalysis = () => {
     }
 
     setIsAnalyzing(true);
-    
-    // Simulate AI analysis
-    setTimeout(() => {
-      const mockDiseases = [
-        {
-          name: "Late Blight",
-          confidence: 92,
-          severity: "High",
-          description: "Late blight is a serious disease that affects potato and tomato plants. Dark, water-soaked spots appear on leaves and stems.",
-          treatment: "Apply copper-based fungicides immediately. Remove affected leaves and ensure good air circulation.",
-          prevention: "Plant resistant varieties, avoid overhead watering, and maintain proper spacing between plants."
+    try {
+      // Convert data URL back to File for upload
+      const res = await fetch(uploadedImage);
+      const blob = await res.blob();
+      const file = new File([blob], "upload.png", { type: blob.type || "image/png" });
+      const data = await postAnalyzeImage(file, true, "hinglish");
+      const result = {
+        disease: {
+          name: data?.analysis_result?.predicted_class || "Unknown",
+          confidence: Math.round((data?.analysis_result?.confidence || 0) * 100),
+          severity: "Medium",
+          description: data?.detailed_info || "",
+          treatment: data?.analysis_result?.cure || "",
+          prevention: data?.analysis_result?.cause || ""
         },
-        {
-          name: "Leaf Spot",
-          confidence: 87,
-          severity: "Medium", 
-          description: "Fungal leaf spot causes circular brown spots with yellow halos on leaves, leading to premature leaf drop.",
-          treatment: "Use fungicidal sprays containing chlorothalonil or copper. Remove infected leaves and debris.",
-          prevention: "Avoid watering foliage, improve air circulation, and practice crop rotation."
-        },
-        {
-          name: "Healthy Plant",
-          confidence: 95,
-          severity: "None",
-          description: "Your plant appears healthy with no visible signs of disease or pest damage.",
-          treatment: "Continue current care routine. Monitor regularly for any changes.",
-          prevention: "Maintain good agricultural practices including proper watering, fertilization, and pest monitoring."
-        }
-      ];
-
-      const randomDisease = mockDiseases[Math.floor(Math.random() * mockDiseases.length)];
-      
-      setAnalysisResult({
-        disease: randomDisease,
         additionalInfo: {
-          cropType: "Tomato Plant",
-          analysisDate: new Date().toLocaleDateString(),
-          weatherConditions: "Humid conditions favor disease development"
-        }
-      });
-      
-      setIsAnalyzing(false);
-      
+          cropType: data?.analysis_result?.crop || "",
+          analysisDate: new Date(data?.timestamp || Date.now()).toLocaleDateString(),
+          weatherConditions: ""
+        },
+        image_url: data?.image_url ? getAssetUrl(data.image_url) : undefined,
+        voice_url: data?.voice_url ? getAssetUrl(data.voice_url) : undefined
+      };
+      setAnalysisResult(result);
       toast({
         title: "Analysis Complete!",
-        description: `Detected: ${randomDisease.name} (${randomDisease.confidence}% confidence)`
+        description: `Detected: ${result.disease.name}`
       });
-    }, 4000);
+    } catch (e) {
+      setAnalysisResult({ error: "Unable to analyze the image right now." });
+      toast({
+        title: "Analysis Failed",
+        description: "Unable to analyze the image right now",
+        variant: "destructive"
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
-  const speakResult = () => {
-    if (!analysisResult || !('speechSynthesis' in window)) {
+  // Cleanup audio on component unmount or page navigation
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+        URL.revokeObjectURL(currentAudio.src);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden && currentAudio) {
+        currentAudio.pause();
+        setIsSpeaking(false);
+        setCurrentAudio(null);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+        URL.revokeObjectURL(currentAudio.src);
+      }
+    };
+  }, [currentAudio]);
+
+  const speakResult = async () => {
+    if (!analysisResult || !analysisResult.voice_url) {
       toast({
-        title: "Speech Not Available",
-        description: "Text-to-speech is not supported in your browser",
+        title: "Voice Not Available",
+        description: "No voice result available for this analysis.",
         variant: "destructive"
       });
       return;
     }
 
-    if (isSpeaking) {
-      speechSynthesis.cancel();
+    // If currently playing, stop the audio
+    if (isSpeaking && currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      URL.revokeObjectURL(currentAudio.src);
+      setCurrentAudio(null);
       setIsSpeaking(false);
       return;
     }
 
-    const text = `Analysis results: ${analysisResult.disease.name} detected with ${analysisResult.disease.confidence}% confidence. ${analysisResult.disease.description} Treatment recommendation: ${analysisResult.disease.treatment}`;
-    
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.8;
-    utterance.pitch = 1;
-    
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => {
+    setIsSpeaking(true);
+    try {
+      const response = await fetch(analysisResult.voice_url);
+      if (!response.ok) throw new Error("Failed to fetch audio");
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new window.Audio(audioUrl);
+      
+      audio.onended = () => {
+        setIsSpeaking(false);
+        setCurrentAudio(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+      
+      audio.onerror = () => {
+        setIsSpeaking(false);
+        setCurrentAudio(null);
+        URL.revokeObjectURL(audioUrl);
+        toast({
+          title: "Speech Error",
+          description: "Unable to play audio",
+          variant: "destructive"
+        });
+      };
+      
+      setCurrentAudio(audio);
+      await audio.play();
+    } catch (e) {
       setIsSpeaking(false);
+      setCurrentAudio(null);
       toast({
         title: "Speech Error",
         description: "Unable to play audio",
         variant: "destructive"
       });
-    };
-
-    speechSynthesis.speak(utterance);
+    }
   };
 
   const getSeverityColor = (severity: string) => {
@@ -155,32 +208,7 @@ const ImageAnalysis = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-gradient-glass backdrop-blur-md border-b border-border/50">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center space-x-4">
-            <Button
-              variant="ghost"
-              onClick={() => navigate("/dashboard")}
-              className="text-muted-foreground hover:text-primary"
-            >
-              <ArrowLeft className="h-5 w-5 mr-2" />
-              Dashboard
-            </Button>
-            <div className="flex items-center space-x-3">
-              <div className="bg-gradient-primary p-2 rounded-xl shadow-green">
-                <Camera className="h-6 w-6 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="text-xl font-display font-semibold text-foreground">Image Analysis</h1>
-                <p className="text-sm text-muted-foreground">AI-Powered Crop Disease Detection</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <MainLayout>
       <div className="container mx-auto px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Upload Section */}
@@ -281,8 +309,95 @@ const ImageAnalysis = () => {
 
           {/* Results Section */}
           <div className="space-y-6">
-            {analysisResult ? (
+            {isAnalyzing ? (
+              <Card className="bg-gradient-card shadow-card hover:shadow-elevated transition-smooth animate-fade-in">
+                <CardContent className="p-8">
+                  <div className="space-y-6">
+                    {/* Main Loading Animation */}
+                    <div className="relative mx-auto w-32 h-32">
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-success/20 rounded-full animate-ping"></div>
+                      <div className="absolute inset-4 bg-gradient-to-r from-primary/40 to-success/40 rounded-full animate-ping" style={{animationDelay: '0.5s'}}></div>
+                      <div className="absolute inset-8 bg-gradient-to-r from-primary/60 to-success/60 rounded-full animate-ping" style={{animationDelay: '1s'}}></div>
+                      <div className="relative flex items-center justify-center w-full h-full bg-gradient-primary rounded-full shadow-lg">
+                        <Brain className="h-12 w-12 text-primary-foreground animate-pulse" />
+                      </div>
+                    </div>
+                    
+                    {/* Title */}
+                    <div className="text-center">
+                      <h3 className="text-xl font-bold text-foreground mb-2">
+                        AI Analysis in Progress
+                      </h3>
+                      <p className="text-muted-foreground">
+                        Our advanced AI is examining your crop image...
+                      </p>
+                    </div>
+
+                    {/* Progress Steps */}
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="flex flex-col items-center space-y-2 p-4 bg-gradient-to-br from-primary/10 to-primary/5 rounded-lg border border-primary/20">
+                          <div className="relative">
+                            <Search className="h-8 w-8 text-primary animate-bounce" style={{animationDelay: '0s'}} />
+                            <Sparkles className="absolute -top-1 -right-1 h-4 w-4 text-warning animate-pulse" />
+                          </div>
+                          <span className="text-sm font-medium text-foreground">Scanning</span>
+                          <span className="text-xs text-muted-foreground text-center">Detecting crop features</span>
+                        </div>
+                        
+                        <div className="flex flex-col items-center space-y-2 p-4 bg-gradient-to-br from-success/10 to-success/5 rounded-lg border border-success/20">
+                          <div className="relative">
+                            <Microscope className="h-8 w-8 text-success animate-bounce" style={{animationDelay: '0.3s'}} />
+                            <Zap className="absolute -top-1 -right-1 h-4 w-4 text-warning animate-pulse" style={{animationDelay: '0.2s'}} />
+                          </div>
+                          <span className="text-sm font-medium text-foreground">Analyzing</span>
+                          <span className="text-xs text-muted-foreground text-center">Identifying diseases</span>
+                        </div>
+                        
+                        <div className="flex flex-col items-center space-y-2 p-4 bg-gradient-to-br from-warning/10 to-warning/5 rounded-lg border border-warning/20">
+                          <div className="relative">
+                            <Eye className="h-8 w-8 text-warning animate-bounce" style={{animationDelay: '0.6s'}} />
+                            <Brain className="absolute -top-1 -right-1 h-4 w-4 text-primary animate-pulse" style={{animationDelay: '0.4s'}} />
+                          </div>
+                          <span className="text-sm font-medium text-foreground">Processing</span>
+                          <span className="text-xs text-muted-foreground text-center">Generating insights</span>
+                        </div>
+                      </div>
+                      
+                      {/* Progress Bar */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm text-muted-foreground">
+                          <span>Analysis Progress</span>
+                          <span>Processing...</span>
+                        </div>
+                        <div className="w-full bg-border rounded-full h-3 overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-primary via-success to-warning rounded-full animate-pulse transition-all duration-2000" 
+                               style={{width: '75%', animation: 'loading-progress 3s ease-in-out infinite'}}></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Status Messages */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-center space-x-3 p-3 bg-gradient-to-r from-primary/5 to-success/5 rounded-lg border border-primary/10">
+                        <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                        <span className="text-sm text-foreground font-medium">Applying deep learning algorithms...</span>
+                      </div>
+                      
+                      <div className="text-center">
+                        <p className="text-xs text-muted-foreground">
+                          This usually takes 10-30 seconds depending on image complexity
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : analysisResult ? (
               <>
+                {analysisResult.error && (
+                  <div className="mb-4 text-destructive text-sm text-center">{analysisResult.error}</div>
+                )}
                 {/* Main Result */}
                 <Card className="bg-gradient-card shadow-card hover:shadow-elevated transition-smooth animate-fade-in">
                   <CardHeader>
@@ -294,8 +409,12 @@ const ImageAnalysis = () => {
                       <Button
                         onClick={speakResult}
                         variant="outline"
-                        size="sm"
-                        className="border-primary/20 text-primary hover:bg-primary hover:text-primary-foreground"
+                        className={`inline-flex items-center justify-center h-9 rounded-md border px-3 text-sm font-medium transition-all ${
+                          isSpeaking 
+                            ? 'border-destructive/20 text-destructive hover:bg-destructive hover:text-destructive-foreground animate-pulse' 
+                            : 'border-primary/20 text-primary hover:bg-primary hover:text-primary-foreground'
+                        }`}
+                        aria-label={isSpeaking ? "Stop audio" : "Play analysis audio"}
                       >
                         {isSpeaking ? (
                           <VolumeX className="h-4 w-4" />
@@ -403,7 +522,7 @@ const ImageAnalysis = () => {
           </div>
         </div>
       </div>
-    </div>
+    </MainLayout>
   );
 };
 

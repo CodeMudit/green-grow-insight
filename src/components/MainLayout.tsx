@@ -63,6 +63,9 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   ];
 
   const handleLogout = () => {
+    try {
+      localStorage.removeItem("auth_token");
+    } catch {}
     toast({
       title: "Logged out successfully",
       description: "See you soon!"

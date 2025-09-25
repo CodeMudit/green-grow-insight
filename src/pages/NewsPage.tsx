@@ -20,6 +20,8 @@ import {
   Globe
 } from "lucide-react";
 import MainLayout from "@/components/MainLayout";
+import { useEffect } from "react";
+import { getCropNews } from "@/lib/api";
 
 const NewsPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -108,6 +110,14 @@ const NewsPage = () => {
       image: "https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?w=400&h=200&fit=crop"
     }
   ];
+
+  useEffect(() => {
+    // Example: could fetch for a default crop like "wheat" and merge/replace
+    // Keeping current sample content to avoid design changes; users can wire UI state to real data.
+    (async () => {
+      try { await getCropNews("wheat"); } catch {}
+    })();
+  }, []);
 
   const filteredNews = newsData.filter(news => {
     const matchesSearch = news.title.toLowerCase().includes(searchQuery.toLowerCase()) ||

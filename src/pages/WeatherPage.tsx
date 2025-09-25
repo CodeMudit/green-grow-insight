@@ -24,12 +24,14 @@ import {
   Clock
 } from "lucide-react";
 import MainLayout from "@/components/MainLayout";
+import { useEffect } from "react";
+import { getWeather } from "@/lib/api";
 
 const WeatherPage = () => {
   const [searchLocation, setSearchLocation] = useState("");
   const [selectedDay, setSelectedDay] = useState(0);
 
-  const currentWeather = {
+  const [currentWeather, setCurrentWeather] = useState({
     location: "Mumbai, Maharashtra",
     temperature: 28,
     condition: "Partly Cloudy",
@@ -42,7 +44,40 @@ const WeatherPage = () => {
     sunrise: "06:15 AM",
     sunset: "07:30 PM",
     pressure: 1013
-  };
+  });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(async (pos) => {
+            const { latitude, longitude } = pos.coords;
+            const loc = `${latitude.toFixed(4)},${longitude.toFixed(4)}`;
+            try {
+              const data = await getWeather(loc);
+              // Best-effort mapping without changing UI
+              setCurrentWeather((prev) => ({
+                location: data?.location || prev.location,
+                temperature: Math.round(data?.current?.temp_c ?? data?.temperature ?? prev.temperature),
+                condition: data?.current?.condition?.text || data?.condition || prev.condition,
+                feelsLike: Math.round(data?.current?.feelslike_c ?? data?.feels_like ?? prev.feelsLike),
+                humidity: Math.round(data?.current?.humidity ?? data?.humidity ?? prev.humidity),
+                windSpeed: Math.round(data?.current?.wind_kph ?? data?.windSpeed ?? prev.windSpeed),
+                windDirection: data?.current?.wind_dir || prev.windDirection,
+                visibility: Math.round(data?.current?.vis_km ?? prev.visibility),
+                uvIndex: Math.round(data?.current?.uv ?? prev.uvIndex),
+                sunrise: data?.astronomy?.sunrise || prev.sunrise,
+                sunset: data?.astronomy?.sunset || prev.sunset,
+                pressure: Math.round(data?.current?.pressure_mb ?? prev.pressure)
+              }));
+            } catch {}
+          }, async () => {
+            try { await getWeather("Mumbai"); } catch {}
+          }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
+        }
+      } catch {}
+    })();
+  }, []);
 
   const hourlyForecast = [
     { time: "Now", temp: 28, condition: "Partly Cloudy", icon: CloudSun, rain: 10 },

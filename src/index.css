@@ -4,6 +4,14 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes loading-progress {
+  0% { width: 20%; }
+  25% { width: 45%; }
+  50% { width: 65%; }
+  75% { width: 85%; }
+  100% { width: 75%; }
+}
+
 /* Farmer-themed Design System with Futuristic Elements */
 @layer base {
   :root {
